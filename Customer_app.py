@@ -162,9 +162,9 @@ with st.form("invoice_request_form"):
         send_line_message(msg)  # เรียกใช้ฟังก์ชันที่สร้างไว้ข้างบน
         
     except Exception as e:
-        st.warning(f"บันทึกได้ แต่ส่งไลน์ไม่ผ่าน: {e}")
-    # ---------------------------------------------
+            st.warning(f"บันทึกได้ แต่ส่งไลน์ไม่ผ่าน: {e}")
             st.balloons()
             time.sleep(3)
             st.rerun()
+
 
