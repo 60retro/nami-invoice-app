@@ -83,7 +83,7 @@ with st.form("invoice_request_form"):
     
     st.write("---")
     st.subheader("รายละเอียดสินค้า/บริการ")
-    c_item = st.text_input("รายการ", value="ค่าอาหาร เครื่องดื่ม และเบเกอรี่")
+    c_item = st.text_input("รายการ", value="ค่าอาหารเครื่องดื่ม และเบเกอรี่")
     c_price = st.number_input("ยอดเงินรวม (บาท)", min_value=0.0, step=1.0)
     
     submitted = st.form_submit_button("ส่งคำขอใบกำกับภาษี")
@@ -94,20 +94,19 @@ with st.form("invoice_request_form"):
         else:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
-            # --- A. บันทึกลงคิว (Queue) ---
-            # ลำดับต้องตรงกับที่โปรแกรม Desktop รออ่าน:
-            # [Name, TaxID, Addr1, Addr2, Phone, Item, Qty, Price, Status, Timestamp]
+           # --- A. บันทึกลงคิว (Queue) ---
+            # แก้ไข: ย้าย timestamp มาไว้คอลัมน์แรก (Column A) เพื่อแก้ปัญหาข้อมูลเลื่อน
             new_row_queue = [
-                c_name, 
-                str(c_tax), 
+                timestamp,      # <--- ย้ายมาไว้หน้าสุด (Column A)
+                c_name,         # (Column B)
+                str(c_tax),     # (Column C)
                 c_addr1, 
                 c_addr2, 
-                str(c_phone),  # ใส่เบอร์โทรที่รับมาจากฟอร์ม
+                str(c_phone),
                 c_item, 
-                1, 
-                c_price, 
-                "Pending", 
-                timestamp
+                1,              # Qty
+                c_price,        # Price
+                "Pending"       # Status
             ]
             sheet_queue.append_row(new_row_queue)
 
@@ -127,4 +126,5 @@ with st.form("invoice_request_form"):
             st.balloons()
             time.sleep(3)
             st.rerun() # รีเฟรชหน้าจอเพื่อรับคิวใหม่
+
 
