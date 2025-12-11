@@ -4,11 +4,35 @@ from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 import time
 import pandas as pd
+import requests
+import json
 
 # ตั้งค่าหน้าเว็บ
 st.set_page_config(page_title="ขอใบกำกับภาษี - ร้าน Nami 345 ปากเกร็ด", page_icon="🧾")
 
 # --- ฟังก์ชันช่วยซ่อมเบอร์โทรศัพท์ ---
+def send_line_message(message_text):
+    try:
+        if "line_messaging" in st.secrets:
+            token = st.secrets["line_messaging"]["channel_access_token"]
+            user_id = st.secrets["line_messaging"]["user_id"]
+            
+            url = 'https://api.line.me/v2/bot/message/push'
+            headers = {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + token
+            }
+            
+            payload = {
+                "to": user_id,
+                "messages": [{"type": "text", "text": message_text}]
+            }
+            
+            response = requests.post(url, headers=headers, data=json.dumps(payload))
+            if response.status_code != 200:
+                print(f"ส่งไลน์ไม่ผ่าน: {response.text}") # ใช้ print เช็คใน log แทน st.error เพื่อไม่ให้รกหน้าจอ
+    except Exception as e:
+        print(f"Error sending LINE: {e}")
 def fix_phone_number(phone_val):
     """
     ทำให้เบอร์โทรเป็นตัวเลขล้วนๆ ไม่มีขีด ไม่มีคอมม่า
@@ -128,6 +152,19 @@ with st.form("invoice_request_form"):
             sheet_db.append_row(customer_data)
 
             st.success("✅ ส่งข้อมูลเรียบร้อย! ขอบคุณครับ")
+            # --- (3) แทรกโค้ดส่งไลน์ ต่อท้ายตรงนี้เลยครับ ---
+    try:
+        current_time = datetime.now().strftime("%d/%m/%Y %H:%M")
+        
+        # แก้ตัวแปร name, total_price ให้ตรงกับที่คุณใช้รับค่าด้านบนนะครับ
+        msg = f"📄 มีคำขอใหม่!\nลูกค้า: {name}\nยอด: {total_price} บาท\nเวลา: {current_time}"
+        
+        send_line_message(msg)  # เรียกใช้ฟังก์ชันที่สร้างไว้ข้างบน
+        
+    except Exception as e:
+        st.warning(f"บันทึกได้ แต่ส่งไลน์ไม่ผ่าน: {e}")
+    # ---------------------------------------------
             st.balloons()
             time.sleep(3)
             st.rerun()
+
