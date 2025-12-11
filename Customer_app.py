@@ -83,7 +83,7 @@ with st.form("invoice_request_form"):
     
     st.write("---")
     st.subheader("รายละเอียดสินค้า/บริการ")
-    c_item = st.text_input("รายการ", value="ค่าอาหารเครื่องดื่ม และเบเกอรี่")
+    c_item = st.text_input("รายการ", value="ค่าอาหารเครื่องดื่ม และเบเกอรี่", disable=True)
     c_price = st.number_input("ยอดเงินรวม (บาท)", min_value=0.0, step=1.0)
     
     submitted = st.form_submit_button("ส่งคำขอใบกำกับภาษี")
@@ -126,5 +126,6 @@ with st.form("invoice_request_form"):
             st.balloons()
             time.sleep(3)
             st.rerun() # รีเฟรชหน้าจอเพื่อรับคิวใหม่
+
 
 
