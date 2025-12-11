@@ -15,7 +15,7 @@ def get_sheet_connection():
     import json
     
     # อ่านค่าจาก Secrets ที่เราจะไปตั้งค่าในเว็บ Streamlit
-    key_dict = st.secrets(st.secrets["gcp_service_account"])
+    key_dict = st.secrets["gcp_service_account"]
     
     # สร้าง Credentials จากค่าที่อ่านได้
     creds = ServiceAccountCredentials.from_json_keyfile_dict(key_dict, scope)
@@ -99,3 +99,4 @@ if len(phone_input) >= 9:
                 time.sleep(3)
 
                 st.rerun()
+
