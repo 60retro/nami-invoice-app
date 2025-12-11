@@ -72,7 +72,7 @@ with st.form("invoice_request_form"):
     st.subheader("รายละเอียดสินค้า/บริการ")
     
     # --- แก้ไขจุดที่ 1: ล็อคไม่ให้แก้ไข (disabled=True) ---
-    c_item = st.text_input("รายการ", value="ค่าอาหารและเครื่องดื่ม", disabled=True)
+    c_item = st.text_input("รายการ", value="อาหาร เครื่องดื่ม และเบเกอรี่", disabled=True)
     
     c_price = st.number_input("ยอดเงินรวม (บาท)", min_value=0.0, step=1.0)
     
@@ -113,3 +113,4 @@ with st.form("invoice_request_form"):
             st.balloons()
             time.sleep(3)
             st.rerun()
+
