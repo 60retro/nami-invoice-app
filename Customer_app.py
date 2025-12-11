@@ -6,7 +6,7 @@ import time
 import pandas as pd
 
 # ตั้งค่าหน้าเว็บ
-st.set_page_config(page_title="ขอใบกำกับภาษี - ร้าน Nami", page_icon="🧾")
+st.set_page_config(page_title="ขอใบกำกับภาษี - ร้าน Nami 345 ปากเกร็ด", page_icon="🧾")
 
 # --- การเชื่อมต่อ Google Sheets ---
 def get_sheet_connection():
@@ -113,4 +113,5 @@ with st.form("invoice_request_form"):
             st.balloons()
             time.sleep(3)
             st.rerun()
+
 
