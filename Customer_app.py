@@ -65,8 +65,8 @@ with st.form("invoice_request_form"):
     c_name = st.text_input("ชื่อผู้เสียภาษี / ชื่อบริษัท", value=default_name)
     c_tax = st.text_input("เลขผู้เสียภาษี", value=search_taxid) 
     c_phone = st.text_input("เบอร์โทรศัพท์", value=str(default_phone))
-    c_addr1 = st.text_input("ที่อยู่ (บรรทัด 1)", value=default_addr1)
-    c_addr2 = st.text_input("ที่อยู่ (บรรทัด 2 / สาขา)", value=default_addr2)
+    c_addr1 = st.text_input("ที่อยู่ (บรรทัด 1 เลขที่/หมู่/ถนน/ตำบล/แขวง)", value=default_addr1)
+    c_addr2 = st.text_input("ที่อยู่ (บรรทัด 2 อำเภอ/เขต/จังหวัด/รหัสไปรษณีย์)", value=default_addr2)
     
     st.write("---")
     st.subheader("รายละเอียดสินค้า/บริการ")
@@ -113,6 +113,7 @@ with st.form("invoice_request_form"):
             st.balloons()
             time.sleep(3)
             st.rerun()
+
 
 
 
