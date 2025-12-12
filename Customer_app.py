@@ -162,7 +162,7 @@ with st.form("invoice_request_form"):
                 str(clean_phone) 
             ]
             sheet_db.append_row(customer_data)
-            st.session_state['last_submitted_id'] = current_data_signature
+            st.session_state['last_submitted_id']=current_data_signature
 
             st.success("✅ ส่งข้อมูลเรียบร้อย! ขอบคุณครับ")
             
@@ -181,6 +181,7 @@ with st.form("invoice_request_form"):
             st.balloons()
             time.sleep(3)
             st.rerun()
+
 
 
 
