@@ -73,8 +73,7 @@ except Exception as e:
 
 # --- ส่วนหน้าจอ UI ของลูกค้า ---
 st.title("🧾 ขอใบกำกับภาษี (ร้าน Nami 345 ปากเกร็ด)")
-if 'last_submitted_id'not in
-st.session_state:
+if 'last_submitted_id'not in st.session_state:
     st.session_state['last_submitted_id'] = ""
 st.caption("กรอกเลขผู้เสียภาษีเพื่อค้นหาข้อมูลเดิม")
 
@@ -182,6 +181,7 @@ with st.form("invoice_request_form"):
             st.balloons()
             time.sleep(3)
             st.rerun()
+
 
 
 
