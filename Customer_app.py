@@ -189,11 +189,14 @@ if len(search_taxid) >= 10:
 # --- แบบฟอร์ม ---
 with st.form("invoice_form"):
     st.write("---")
-    # ... (ส่วนกรอกชื่อ ที่อยู่ เหมือนเดิม) ...
-    default_name = found_cust['Name'] if found_cust else ""
-    default_addr1 = found_cust['Address1'] if found_cust else ""
-    default_addr2 = found_cust['Address2'] if found_cust else ""
-    default_phone = fix_phone_number(found_cust['Phone']) if found_cust else ""
+    # กำหนดค่าเริ่มต้น (ใช้ is not None เพื่อป้องกัน Error)
+    default_name = found_cust['Name'] if found_cust is not None else ""
+    default_addr1 = found_cust['Address1'] if found_cust is not None else ""
+    default_addr2 = found_cust['Address2'] if found_cust is not None else ""
+    
+    # ซ่อมเบอร์โทร
+    raw_phone = found_cust['Phone'] if found_cust is not None else ""
+    default_phone = fix_phone_number(raw_phone)
 
     c_name = st.text_input("ชื่อ/บริษัท", value=default_name)
     c_tax = st.text_input("เลขประจำตัวผู้เสียภาษี", value=search_taxid)
@@ -251,3 +254,4 @@ with st.form("invoice_form"):
             # สำคัญ: เคลียร์ Query Params เพื่อไม่ให้ URL ค้าง
             st.query_params.clear() 
             st.rerun()
+
