@@ -127,7 +127,7 @@ with st.form("invoice_request_form"):
     if submitted:
         if not c_name or not c_tax or c_price <= 0:
             st.error("กรุณากรอกข้อมูลสำคัญให้ครบ (ชื่อ, เลขภาษี, ยอดเงิน)")
-            current_data_signature = f"{c_tax}_{c_price}_{c_phone}"
+            current_data_signature=f"{c_tax}_{c_price}_{c_phone}"
             if st.session_state['last_submitted_id'] ==current_data_signature:
                 st.warning("!ข้อมูลชุดนี้ถูกส่งเข้าระบบเรียบร้อยแล้ว(ป้องกันการกดซ้ำ)")
                 st.stop()
@@ -181,6 +181,7 @@ with st.form("invoice_request_form"):
             st.balloons()
             time.sleep(3)
             st.rerun()
+
 
 
 
