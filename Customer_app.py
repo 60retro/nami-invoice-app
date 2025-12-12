@@ -174,7 +174,7 @@ st.caption("กรอกเลขผู้เสียภาษีเพื่�
 search_taxid = st.text_input("เลขผู้เสียภาษี (Tax ID)", max_chars=13)
 
 found_cust = None
-iif len(search_taxid) >= 10:
+if len(search_taxid) >= 10:
     try:
         # เรียกใช้ผ่านฟังก์ชันที่มี Cache
         data = sheet_db.get_all_records()
@@ -284,5 +284,6 @@ with st.form("invoice_form"):
             # สำคัญ: เคลียร์ Query Params เพื่อไม่ให้ URL ค้าง
             st.query_params.clear() 
             st.rerun()
+
 
 
