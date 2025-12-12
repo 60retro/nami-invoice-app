@@ -73,6 +73,9 @@ except Exception as e:
 
 # --- ส่วนหน้าจอ UI ของลูกค้า ---
 st.title("🧾 ขอใบกำกับภาษี (ร้าน Nami 345 ปากเกร็ด)")
+if 'last_submitted_id' not in
+st.session_state:
+    st.session_state['last_submitted_id'] = ""
 st.caption("กรอกเลขผู้เสียภาษีเพื่อค้นหาข้อมูลเดิม")
 
 # 1. ค้นหาด้วยเลขผู้เสียภาษี
@@ -125,6 +128,10 @@ with st.form("invoice_request_form"):
     if submitted:
         if not c_name or not c_tax or c_price <= 0:
             st.error("กรุณากรอกข้อมูลสำคัญให้ครบ (ชื่อ, เลขภาษี, ยอดเงิน)")
+            current_data_signature = f"{c_tax}_{c_price}_{c_phone}"
+            if st.session_state['last_submitted_id'] ==current_data_signature:
+                st.warning("!ข้อมูลชุดนี้ถูกส่งเข้าระบบเรียบร้อยแล้ว(ป้องกันการกดซ้ำ)")
+                st.stop()
         else:
             tz = pytz.timezone('Asia/Bangkok')
             now_thai = datetime.now(tz)
@@ -156,6 +163,7 @@ with st.form("invoice_request_form"):
                 str(clean_phone) 
             ]
             sheet_db.append_row(customer_data)
+            st.session_state['last_submitted_id'] = current_data_signature
 
             st.success("✅ ส่งข้อมูลเรียบร้อย! ขอบคุณครับ")
             
@@ -174,6 +182,7 @@ with st.form("invoice_request_form"):
             st.balloons()
             time.sleep(3)
             st.rerun()
+
 
 
 
