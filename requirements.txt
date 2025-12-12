@@ -4,3 +4,6 @@ oauth2client
 pandas
 requests
 pytz
+qrcode
+Pillow
+
