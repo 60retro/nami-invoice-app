@@ -14,7 +14,7 @@ from io import BytesIO
 # ==========================================
 # ⚙️ ตั้งค่าระบบ
 # ==========================================
-ADMIN_PASSWORD = "3457" 
+ADMIN_PASSWORD = "34573457" 
 
 st.set_page_config(
     page_title="Nami Invoice", 
@@ -244,3 +244,4 @@ with st.form("invoice_form"):
             time.sleep(3)
             st.query_params.clear() 
             st.rerun()
+
