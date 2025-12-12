@@ -16,7 +16,7 @@ def send_line_message(message_text):
         if "line_messaging" in st.secrets:
             token = st.secrets["line_messaging"]["channel_access_token"]
             # เปลี่ยน user_id เป็น group_id ถ้าคุณตั้งค่าส่งเข้ากลุ่มแล้ว
-            target_id = st.secrets["line_messaging"]["user_id"]
+            target_id = st.secrets["line_messaging"]["group_id"]
             
             url = 'https://api.line.me/v2/bot/message/push'
             headers = {
@@ -171,3 +171,4 @@ with st.form("invoice_request_form"):
             st.balloons()
             time.sleep(3)
             st.rerun()
+
