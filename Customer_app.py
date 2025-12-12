@@ -125,7 +125,9 @@ with st.form("invoice_request_form"):
         if not c_name or not c_tax or c_price <= 0:
             st.error("กรุณากรอกข้อมูลสำคัญให้ครบ (ชื่อ, เลขภาษี, ยอดเงิน)")
         else:
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            tz = pytz.timezone('Asia/Bangkok')
+            now_thai = datetime.now(tz)
+            timestamp = now_thai.strftime("%Y-%m-%d %H:%M:%S")
             clean_phone = fix_phone_number(c_phone)
 
             # --- A. บันทึกลงคิว (Queue) ---
@@ -158,7 +160,7 @@ with st.form("invoice_request_form"):
             
             # --- (3) ส่วนส่งไลน์ (ย่อหน้าให้ตรงกับ st.success) ---
             try:
-                current_time = datetime.now().strftime("%d/%m/%Y %H:%M")
+                current_time = now_thai.strftime("%d/%m/%Y %H:%M")
                 
                 # แก้ชื่อตัวแปรให้ตรงกับ c_name และ c_price
                 msg = f"📄 มีคำขอใหม่!\nลูกค้า: {c_name}\nยอด: {c_price} บาท\nเวลา: {current_time}"
@@ -171,4 +173,5 @@ with st.form("invoice_request_form"):
             st.balloons()
             time.sleep(3)
             st.rerun()
+
 
