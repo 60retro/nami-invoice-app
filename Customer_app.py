@@ -27,7 +27,6 @@ hide_streamlit_style = """
             <style>
             #MainMenu {visibility: hidden;}
             footer {visibility: hidden;}
-            /* ปรับแต่ง Dropdown ให้เด่นขึ้น */
             .stSelectbox div[data-baseweb="select"] > div {
                 border-color: #ff4b4b;
                 background-color: #fff0f0;
@@ -87,7 +86,7 @@ def fix_phone_number(phone_val):
     return s
 
 # ==========================================
-# 🗺️ โหลดฐานข้อมูลที่อยู่ไทย (Auto-Complete)
+# 🗺️ โหลดฐานข้อมูลที่อยู่ไทย
 # ==========================================
 @st.cache_data
 def load_thai_address_data():
@@ -105,21 +104,17 @@ def load_thai_address_data():
 query_params = st.query_params
 token_from_url = query_params.get("token", None)
 
-# --- กรณีที่ 1: หน้า Admin ---
+# --- หน้า Admin (เหมือนเดิม) ---
 if not token_from_url:
     st.title("🔒 ระบบจัดการร้าน Nami")
     st.info("หน้านี้สำหรับเจ้าของร้านเท่านั้น")
-    
     with st.expander("🔑 เข้าสู่ระบบสร้าง QR Code", expanded=True):
         pwd = st.text_input("ใส่รหัสผ่าน", type="password")
-        
         if pwd == ADMIN_PASSWORD:
             st.success("ยินดีต้อนรับครับ!")
             st.markdown("---")
             st.subheader("สร้าง QR รับเงิน")
-            
             gen_amount = st.number_input("ยอดเงินที่ต้องการ (บาท)", min_value=1.0, step=1.0)
-            
             if st.button("✨ สร้าง QR Code และ ลิงก์"):
                 try:
                     token = str(uuid.uuid4())
@@ -127,28 +122,22 @@ if not token_from_url:
                     sheet_token = client.open("Invoice_Data").worksheet("TokenDB")
                     ts = datetime.now(pytz.timezone('Asia/Bangkok')).strftime("%Y-%m-%d %H:%M:%S")
                     sheet_token.append_row([token, gen_amount, "Active", ts])
-                    
                     base_url = "https://nami-invoice-app.streamlit.app" 
                     final_url = f"{base_url}/?token={token}"
-                    
                     qr = qrcode.make(final_url)
                     buf = BytesIO()
                     qr.save(buf)
-                    
                     st.write("---")
                     col1, col2 = st.columns(2)
-                    with col1:
-                        st.image(buf, caption=f"QR ยอด {gen_amount} บาท", width=250)
+                    with col1: st.image(buf, caption=f"QR ยอด {gen_amount} บาท", width=250)
                     with col2:
                         st.warning("🔗 **ลิงก์สำหรับส่งให้ลูกค้า**")
                         st.caption("กดปุ่ม Copy เล็กๆ มุมขวาของกล่องด้านล่าง 👇")
                         st.code(final_url, language=None)
-                        
-                except Exception as e:
-                    st.error(f"เกิดข้อผิดพลาด: {e}")
+                except Exception as e: st.error(f"เกิดข้อผิดพลาด: {e}")
     st.stop()
 
-# --- กรณีที่ 2: หน้าลูกค้า ---
+# --- หน้าลูกค้า ---
 token_data = check_token_status(token_from_url)
 is_valid_customer = False
 locked_amount = 0.0
@@ -165,7 +154,7 @@ else:
     st.stop()
 
 # ==========================================
-# 📝 ส่วนฟอร์มลูกค้า
+# 📝 ส่วนฟอร์มลูกค้า (UI ใหม่ แยกช่อง)
 # ==========================================
 st.title("🧾 ขอใบกำกับภาษี (ร้าน Nami 345)")
 st.success(f"💰 ยอดชำระ: {locked_amount:,.2f} บาท")
@@ -199,11 +188,11 @@ if len(search_taxid) >= 10:
                 st.info(f"✅ พบข้อมูลเดิมของ: {res.iloc[0]['Name']}")
                 found_cust = res.iloc[0]
             else:
-                st.caption("ℹ️ ไม่พบข้อมูลเก่า (กรอกใหม่ด้านล่าง)")
+                st.caption("ℹ️ ไม่พบข้อมูลเก่า")
     except: pass
 
 val_name = found_cust['Name'] if found_cust is not None else ""
-val_addr1 = found_cust['Address1'] if found_cust is not None else ""
+val_addr1_full = found_cust['Address1'] if found_cust is not None else ""
 val_addr2 = found_cust['Address2'] if found_cust is not None else ""
 val_phone = fix_phone_number(found_cust['Phone']) if found_cust is not None else ""
 
@@ -213,23 +202,25 @@ c_name = st.text_input("ชื่อลูกค้า / ชื่อบริ�
 c_tax = st.text_input("เลขประจำตัวผู้เสียภาษี", value=search_taxid)
 c_phone = st.text_input("เบอร์โทรศัพท์", value=val_phone)
 
+# ==========================================
+# 📍 ส่วนที่อยู่ (ปรับปรุงใหม่ แยกช่อง)
+# ==========================================
 st.markdown("---")
 st.markdown("### 3. ที่อยู่ (ระบบช่วยค้นหา)")
 
-# กล่องค้นหา Zipcode
+# 1. รหัสไปรษณีย์มาก่อน
 input_zip = st.text_input("📮 รหัสไปรษณีย์ (พิมพ์เพื่อค้นหาที่อยู่)", max_chars=5)
 
-# ค่าเริ่มต้นของที่อยู่ (ถ้ามีข้อมูลเก่าก็ใช้ข้อมูลเก่า)
-selected_addr_text1 = val_addr1
-selected_addr_text2 = val_addr2
+# ตัวแปรสำหรับเก็บค่าที่จะแสดงในช่อง
+display_sub_district = "" 
+display_province = val_addr2
 
-# Logic: Dropdown
+# Logic Dropdown
 if len(input_zip) == 5 and not thai_db.empty:
     thai_db['zipcode'] = thai_db['zipcode'].astype(str)
     results = thai_db[thai_db['zipcode'] == input_zip]
     
     if not results.empty:
-        # สร้างตัวเลือก (Options)
         options = []
         for index, row in results.iterrows():
             if "กรุงเทพ" in row['province']:
@@ -238,22 +229,31 @@ if len(input_zip) == 5 and not thai_db.empty:
                 label = f"ต.{row['district']} > อ.{row['amphoe']} > จ.{row['province']}"
             options.append(label)
         
-        # 🟢 เพิ่มตัวเลือกแรกสุด เพื่อบังคับให้กดเลือก
         final_options = ["👇 กดตรงนี้เพื่อเลือกตำบล/อำเภอที่ถูกต้อง..."] + options
+        selected_option = st.selectbox("📍 เลือกตำบล/อำเภอ:", final_options)
         
-        selected_option = st.selectbox("📍 กรุณาเลือก ตำบล/อำเภอ:", final_options)
-        
-        # ถ้ามีการเลือก (และไม่ใช่ตัวเลือกแรกสุดที่เป็น Placeholder)
         if selected_option and "👇" not in selected_option:
             parts = selected_option.split(" > ")
-            selected_addr_text1 = f"{parts[0]} {parts[1]}" 
-            selected_addr_text2 = f"{parts[2]} {input_zip}"
-            st.success("✅ ระบบเติมที่อยู่ให้แล้วครับ")
+            # แยกชิ้นส่วน: parts[0]=ตำบล, parts[1]=อำเภอ, parts[2]=จังหวัด
+            display_sub_district = f"{parts[0]} {parts[1]}"
+            display_province = f"{parts[2]} {input_zip}"
+            st.success("✅ ระบบเติมตำบล/อำเภอให้แล้ว กรุณาพิมพ์เลขที่บ้านด้านล่าง")
     else:
         st.warning("❌ ไม่พบรหัสไปรษณีย์นี้")
 
-c_addr1 = st.text_input("ที่อยู่บรรทัด 1 (เลขที่, หมู่บ้าน, ถนน, ตำบล, อำเภอ)", value=selected_addr_text1)
-c_addr2 = st.text_input("ที่อยู่บรรทัด 2 (จังหวัด, รหัสไปรษณีย์)", value=selected_addr_text2)
+# ถ้าเป็นลูกค้าเก่า (found_cust มีค่า) ให้เอาค่าเก่าใส่ช่องเลขที่บ้านไปก่อน
+# ถ้าเป็นลูกค้าใหม่ ช่องนี้จะว่าง ให้พิมพ์เอง
+default_house_no = val_addr1_full if found_cust else ""
+
+# 2. แยกช่องกรอกเลขที่บ้าน
+c_house_no = st.text_input("🏠 เลขที่ / หมู่บ้าน / อาคาร / ถนน / ซอย", value=default_house_no, placeholder="เช่น 99/9 หมู่ 1 ถ.ติวานนท์")
+
+# 3. ช่องตำบล/อำเภอ และ จังหวัด (แสดงผลแยกกัน)
+col_a1, col_a2 = st.columns(2)
+with col_a1:
+    c_dist = st.text_input("ตำบล / อำเภอ", value=display_sub_district, placeholder="ระบบเติมให้อัตโนมัติ")
+with col_a2:
+    c_prov = st.text_input("จังหวัด / รหัสไปรษณีย์", value=display_province, placeholder="ระบบเติมให้อัตโนมัติ")
 
 st.markdown("---")
 c_item = st.text_input("รายการ", value="อาหาร เครื่องดื่ม และเบเกอรี่", disabled=True)
@@ -264,10 +264,11 @@ c_price = st.number_input("ยอดเงินรวม (บาท)", value=lo
 # ==========================================
 st.markdown("")
 if st.button("✅ ยืนยันข้อมูล (กดเพียงครั้งเดียว)", type="primary", use_container_width=True):
+    # เช็คว่ากรอกครบไหม (อนุโลมให้ช่องตำบล/จังหวัด ว่างได้ ถ้าลูกค้าพิมพ์รวมในช่องแรกหมดแล้ว)
     if not c_name or not c_tax:
-        st.error("❌ กรุณากรอก 'ชื่อ' และ 'เลขผู้เสียภาษี' ให้ครบถ้วน")
-    elif not c_addr1 or not c_addr2:
-        st.error("❌ กรุณากรอกที่อยู่ให้ครบถ้วน")
+        st.error("❌ กรุณากรอก 'ชื่อ' และ 'เลขผู้เสียภาษี'")
+    elif not c_house_no: 
+        st.error("❌ กรุณากรอก 'ที่อยู่ (เลขที่บ้าน)'")
     else:
         sig = f"{c_tax}_{c_price}_{token_from_url}"
         
@@ -277,9 +278,15 @@ if st.button("✅ ยืนยันข้อมูล (กดเพียงค
             ts = datetime.now(pytz.timezone('Asia/Bangkok')).strftime("%Y-%m-%d %H:%M:%S")
             cl_phone = fix_phone_number(c_phone)
             
+            # รวมร่างที่อยู่ส่งเข้า Google Sheet (เพื่อให้รูปแบบเหมือนเดิม)
+            # Address1 = เลขที่บ้าน + ตำบล/อำเภอ
+            final_addr1 = f"{c_house_no} {c_dist}".strip()
+            # Address2 = จังหวัด
+            final_addr2 = c_prov.strip()
+            
             try:
-                sheet_queue.append_row([ts, c_name, str(c_tax), c_addr1, c_addr2, str(cl_phone), c_item, 1, c_price, "Pending"])
-                sheet_db.append_row([c_name, str(c_tax), c_addr1, c_addr2, str(cl_phone)])
+                sheet_queue.append_row([ts, c_name, str(c_tax), final_addr1, final_addr2, str(cl_phone), c_item, 1, c_price, "Pending"])
+                sheet_db.append_row([c_name, str(c_tax), final_addr1, final_addr2, str(cl_phone)])
                 mark_token_as_used(token_from_url)
                 
                 msg = f"✅ ลูกค้ากรอกฟอร์มสำเร็จ\nชื่อ: {c_name}\nยอด: {c_price} บาท\nเวลา: {ts}"
