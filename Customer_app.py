@@ -14,7 +14,7 @@ from io import BytesIO
 # ==========================================
 # ⚙️ ตั้งค่าระบบ
 # ==========================================
-ADMIN_PASSWORD = "3457" 
+ADMIN_PASSWORD = "34573457" 
 
 st.set_page_config(
     page_title="Nami Invoice", 
@@ -304,3 +304,4 @@ if st.button("✅ ยืนยันข้อมูล (กดเพียงค
                 st.rerun()
             except Exception as e:
                 st.error(f"เกิดข้อผิดพลาดในการบันทึก: {e}")
+
