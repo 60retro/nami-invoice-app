@@ -24,13 +24,11 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 🎨 CSS (รวมแก้สีตัวหนังสือ Dropdown + จัดระยะปุ่ม)
+# 🎨 CSS
 hide_streamlit_style = """
             <style>
             #MainMenu {visibility: hidden;}
             footer {visibility: hidden;}
-            
-            /* ปรับแต่ง Dropdown Box */
             .stSelectbox div[data-baseweb="select"] > div {
                 border-color: #ff4b4b !important;
                 background-color: #fff0f0 !important;
@@ -42,8 +40,6 @@ hide_streamlit_style = """
             .stSelectbox div[data-baseweb="select"] svg {
                 fill: #000000 !important;
             }
-            
-            /* ปรับระยะห่างปุ่มกดให้ตรงกับช่องกรอก */
             div[data-testid="column"] button {
                 margin-top: 0px;
             }
@@ -52,7 +48,7 @@ hide_streamlit_style = """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
 # ==========================================
-# 🔌 ส่วนเชื่อมต่อ Database & System
+# 🔌 ส่วนเชื่อมต่อ Database
 # ==========================================
 @st.cache_resource
 def get_sheet_connection():
@@ -101,9 +97,6 @@ def fix_phone_number(phone_val):
     if s.isdigit() and len(s) == 9: return "0" + s
     return s
 
-# ==========================================
-# 🗺️ โหลดฐานข้อมูลที่อยู่ไทย
-# ==========================================
 @st.cache_data
 def load_thai_address_data():
     try:
@@ -113,20 +106,20 @@ def load_thai_address_data():
     except:
         return pd.DataFrame()
 
-# ==========================================
-# 🧹 ฟังก์ชันทำความสะอาดที่อยู่ (Smart Cleaner)
-# ==========================================
+# 🧹 Smart Cleaner Function
 def smart_clean_address(addr1, addr2):
     house = str(addr1)
     dist = ""
     prov = str(addr2)
 
+    # ดึง เขต/อำเภอ ออกจาก จังหวัด
     match_amp = re.search(r'(เขต|อำเภอ|อ\.)\s*([^\s]+)', prov)
     if match_amp:
         extracted = match_amp.group(0)
         dist += extracted + " "
         prov = prov.replace(extracted, "").strip()
 
+    # ดึง แขวง/ตำบล ออกจาก บ้านเลขที่
     match_tum = re.search(r'(แขวง|ตำบล|ต\.)\s*([^\s]+)', house)
     if match_tum:
         extracted = match_tum.group(0)
@@ -142,7 +135,6 @@ def smart_clean_address(addr1, addr2):
 query_params = st.query_params
 token_from_url = query_params.get("token", None)
 
-# --- หน้า Admin ---
 if not token_from_url:
     st.title("🔒 ระบบจัดการร้าน Nami")
     st.info("หน้านี้สำหรับเจ้าของร้านเท่านั้น")
@@ -175,7 +167,6 @@ if not token_from_url:
                 except Exception as e: st.error(f"เกิดข้อผิดพลาด: {e}")
     st.stop()
 
-# --- หน้าลูกค้า ---
 token_data = check_token_status(token_from_url)
 is_valid_customer = False
 locked_amount = 0.0
@@ -209,24 +200,25 @@ except:
     st.error("Connection Error")
     st.stop()
 
-# --- 1. ค้นหาข้อมูลเดิม (เพิ่มปุ่ม Search) ---
+# --- 1. ค้นหาข้อมูลเดิม ---
 st.markdown("### 1. ค้นหาข้อมูลเดิม (ถ้ามี)")
 
-col_s1, col_s2 = st.columns([3, 1]) # แบ่งช่อง 75% กับ 25%
+col_s1, col_s2 = st.columns([3, 1])
 with col_s1:
     search_taxid = st.text_input("กรอกเลขผู้เสียภาษี (Tax ID)", max_chars=13, placeholder="เช่น 0123456789012")
 with col_s2:
-    st.write("") # ดันปุ่มลงมาให้ตรงช่อง
+    st.write("")
     st.write("")
     btn_search = st.button("🔍 ค้นหา", key="btn_tax_search", use_container_width=True)
 
+# 🟢 ประกาศตัวแปรเริ่มต้นให้ครบทุกตัว (แก้ ValueError)
 found_cust = None
 val_name = ""
 val_addr1_full = ""
 val_addr2 = ""
 val_phone = ""
+val_dist_clean = ""  # เพิ่มตัวนี้
 
-# Logic ค้นหา (ทำงานเมื่อกดปุ่ม หรือพิมพ์ครบ 10 หลัก)
 if (len(search_taxid) >= 10) or btn_search:
     try:
         data = sheet_db.get_all_records()
@@ -244,6 +236,7 @@ if (len(search_taxid) >= 10) or btn_search:
                 raw_addr2 = found_cust['Address2']
                 val_phone = fix_phone_number(found_cust['Phone'])
                 
+                # 🧹 ใช้ Smart Cleaner
                 val_addr1_full, val_dist_clean, val_addr2 = smart_clean_address(raw_addr1, raw_addr2)
             else:
                 st.caption("ℹ️ ไม่พบข้อมูลเก่า (กรอกใหม่ด้านล่าง)")
@@ -252,16 +245,15 @@ if (len(search_taxid) >= 10) or btn_search:
 st.markdown("---")
 st.markdown("### 2. ข้อมูลบริษัท/ลูกค้า")
 c_name = st.text_input("ชื่อลูกค้า / ชื่อบริษัท", value=val_name)
-c_tax = st.text_input("เลขประจำตัวผู้เสียภาษี", value=search_taxid, max_chars=13) # ใส่ max_chars ไว้ด้วย
+c_tax = st.text_input("เลขประจำตัวผู้เสียภาษี", value=search_taxid, max_chars=13)
 c_phone = st.text_input("เบอร์โทรศัพท์", value=val_phone)
 
 # ==========================================
-# 📍 ส่วนที่อยู่ (เพิ่มปุ่ม Search Zipcode)
+# 📍 ส่วนที่อยู่
 # ==========================================
 st.markdown("---")
 st.markdown("### 3. ที่อยู่ (ระบบช่วยค้นหา)")
 
-# 1. รหัสไปรษณีย์ + ปุ่มค้นหา
 col_z1, col_z2 = st.columns([3, 1])
 with col_z1:
     input_zip = st.text_input("📮 รหัสไปรษณีย์", max_chars=5, placeholder="พิมพ์แล้วกดค้นหาด้านขวา 👉")
@@ -270,10 +262,10 @@ with col_z2:
     st.write("")
     btn_zip = st.button("🔍 ค้นหาที่อยู่", key="btn_zip_search", use_container_width=True)
 
-display_sub_district = val_dist_clean if found_cust else ""
+# 🟢 ใช้ค่าที่ Clean แล้ว ถ้ามี
+display_sub_district = val_dist_clean 
 display_province = val_addr2
 
-# Logic Dropdown (ทำงานเมื่อกดปุ่ม หรือพิมพ์ครบ 5 หลัก)
 if (len(input_zip) == 5 and not thai_db.empty) or btn_zip:
     if len(input_zip) == 5:
         thai_db['zipcode'] = thai_db['zipcode'].astype(str)
@@ -301,7 +293,7 @@ if (len(input_zip) == 5 and not thai_db.empty) or btn_zip:
     elif btn_zip and len(input_zip) < 5:
         st.error("กรุณากรอกรหัสไปรษณีย์ให้ครบ 5 หลัก")
 
-default_house_no = val_addr1_full if found_cust is not None else ""
+default_house_no = val_addr1_full
 
 # 2. ช่องกรอกเลขที่บ้าน
 c_house_no = st.text_input("🏠 เลขที่ / หมู่บ้าน / อาคาร / ถนน / ซอย", value=default_house_no, placeholder="เช่น 99/9 หมู่ 1 ถ.ติวานนท์")
@@ -318,14 +310,13 @@ c_item = st.text_input("รายการ", value="อาหาร เครื
 c_price = st.number_input("ยอดเงินรวม (บาท)", value=locked_amount, disabled=True)
 
 # ==========================================
-# 🔘 ปุ่มยืนยัน (เพิ่ม Validaiton 13 หลัก)
+# 🔘 ปุ่มยืนยัน
 # ==========================================
 st.markdown("")
 if st.button("✅ ยืนยันข้อมูล (กดเพียงครั้งเดียว)", type="primary", use_container_width=True):
-    # 🛑 Validation Checks
     if not c_name or not c_tax:
         st.error("❌ กรุณากรอก 'ชื่อ' และ 'เลขผู้เสียภาษี'")
-    elif len(c_tax) != 13: # 🟢 เช็คเลข 13 หลักตรงนี้
+    elif len(c_tax) != 13:
         st.error("❌ 'เลขประจำตัวผู้เสียภาษี' ต้องมี 13 หลักเท่านั้น")
     elif not c_house_no: 
         st.error("❌ กรุณากรอก 'ที่อยู่ (เลขที่บ้าน)'")
