@@ -97,6 +97,13 @@ def fix_phone_number(phone_val):
     if s.isdigit() and len(s) == 9: return "0" + s
     return s
 
+def fix_tax_id(tax_val):
+    """ทำความสะอาด Tax ID ให้เป็น 13 หลัก (เติม 0)"""
+    s = str(tax_val).strip().replace("-", "").replace(" ", "").replace("'", "")
+    if s.endswith(".0"): s = s[:-2]
+    if s.isdigit() and len(s) < 13: s = s.zfill(13)
+    return s
+
 @st.cache_data
 def load_thai_address_data():
     try:
@@ -193,6 +200,7 @@ if 'last_submitted_id' not in st.session_state:
 
 try:
     client = get_sheet_connection()
+    # 🟢 FIX: ใช้ Tab 'Customers' ให้ตรงกับ Desktop
     sheet_db = client.open("Invoice_Data").worksheet("Customers")
     sheet_queue = client.open("Invoice_Data").worksheet("Queue")
     thai_db = load_thai_address_data() 
@@ -211,22 +219,26 @@ with col_s2:
     st.write("")
     btn_search = st.button("🔍 ค้นหา", key="btn_tax_search", use_container_width=True)
 
-# 🟢 ประกาศตัวแปรเริ่มต้นให้ครบทุกตัว (แก้ ValueError)
 found_cust = None
 val_name = ""
 val_addr1_full = ""
 val_addr2 = ""
 val_phone = ""
-val_dist_clean = ""  # เพิ่มตัวนี้
+val_dist_clean = "" 
 
 if (len(search_taxid) >= 10) or btn_search:
     try:
         data = sheet_db.get_all_records()
         df = pd.DataFrame(data)
         if 'TaxID' in df.columns:
-            df['TaxID'] = df['TaxID'].astype(str).str.replace("'", "", regex=False).str.replace(r'\.0$', '', regex=True).str.strip().str.replace(" ", "")
-            clean_search = str(search_taxid).strip().replace(" ", "").replace("'", "")
-            res = df[df['TaxID'] == clean_search]
+            # 🟢 FIX: Logic ค้นหาแบบยืดหยุ่น (เทียบ 13 หลัก)
+            search_key = fix_tax_id(search_taxid)
+            
+            # สร้างคอลัมน์ชั่วคราวเพื่อเทียบ (Normalize)
+            df['TaxID_Clean'] = df['TaxID'].apply(fix_tax_id)
+            
+            res = df[df['TaxID_Clean'] == search_key]
+            
             if not res.empty: 
                 found_cust = res.iloc[0]
                 st.info(f"✅ พบข้อมูลเดิมของ: {found_cust['Name']}")
@@ -236,11 +248,12 @@ if (len(search_taxid) >= 10) or btn_search:
                 raw_addr2 = found_cust['Address2']
                 val_phone = fix_phone_number(found_cust['Phone'])
                 
-                # 🧹 ใช้ Smart Cleaner
+                # Smart Cleaner
                 val_addr1_full, val_dist_clean, val_addr2 = smart_clean_address(raw_addr1, raw_addr2)
             else:
                 st.caption("ℹ️ ไม่พบข้อมูลเก่า (กรอกใหม่ด้านล่าง)")
-    except: pass
+    except Exception as e: 
+        st.error(f"Search Error: {e}")
 
 st.markdown("---")
 st.markdown("### 2. ข้อมูลบริษัท/ลูกค้า")
@@ -262,7 +275,6 @@ with col_z2:
     st.write("")
     btn_zip = st.button("🔍 ค้นหาที่อยู่", key="btn_zip_search", use_container_width=True)
 
-# 🟢 ใช้ค่าที่ Clean แล้ว ถ้ามี
 display_sub_district = val_dist_clean 
 display_province = val_addr2
 
@@ -332,9 +344,25 @@ if st.button("✅ ยืนยันข้อมูล (กดเพียงค
             final_addr1 = f"{c_house_no} {c_dist}".strip()
             final_addr2 = c_prov.strip()
             
+            # 🟢 FIX: บันทึก TaxID แบบเต็ม 13 หลักเสมอ
+            fixed_tax_val = fix_tax_id(c_tax)
+            
             try:
-                sheet_queue.append_row([ts, c_name, str(c_tax), final_addr1, final_addr2, str(cl_phone), c_item, 1, c_price, "Pending"])
-                sheet_db.append_row([c_name, str(c_tax), final_addr1, final_addr2, str(cl_phone)])
+                # บันทึก Tab Queue
+                sheet_queue.append_row([ts, c_name, fixed_tax_val, final_addr1, final_addr2, str(cl_phone), c_item, 1, c_price, "Pending"])
+                
+                # บันทึก Tab Customers (ถ้ายังไม่มี)
+                # เช็คซ้ำอีกทีก่อนบันทึกเพื่อป้องกันชื่อซ้ำ
+                try:
+                    exist_data = sheet_db.get_all_records()
+                    df_ex = pd.DataFrame(exist_data)
+                    df_ex['TaxID_Clean'] = df_ex['TaxID'].apply(fix_tax_id)
+                    if fixed_tax_val not in df_ex['TaxID_Clean'].values:
+                        sheet_db.append_row([c_name, fixed_tax_val, final_addr1, final_addr2, str(cl_phone)])
+                except:
+                    # ถ้าเช็คไม่ได้ ให้บันทึกไปก่อน (เดี๋ยว Desktop Sync จัดการต่อ)
+                    sheet_db.append_row([c_name, fixed_tax_val, final_addr1, final_addr2, str(cl_phone)])
+
                 mark_token_as_used(token_from_url)
                 
                 msg = f"✅ ลูกค้ากรอกฟอร์มสำเร็จ\nชื่อ: {c_name}\nยอด: {c_price} บาท\nเวลา: {ts}"
@@ -348,4 +376,3 @@ if st.button("✅ ยืนยันข้อมูล (กดเพียงค
                 st.rerun()
             except Exception as e:
                 st.error(f"เกิดข้อผิดพลาดในการบันทึก: {e}")
-
