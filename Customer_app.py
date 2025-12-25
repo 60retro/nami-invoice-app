@@ -193,7 +193,7 @@ if 'last_submitted_id' not in st.session_state:
 
 try:
     client = get_sheet_connection()
-    sheet_db = client.open("Invoice_Data").worksheet("CustomerDB")
+    sheet_db = client.open("Invoice_Data").worksheet("Customers")
     sheet_queue = client.open("Invoice_Data").worksheet("Queue")
     thai_db = load_thai_address_data() 
 except:
@@ -348,3 +348,4 @@ if st.button("✅ ยืนยันข้อมูล (กดเพียงค
                 st.rerun()
             except Exception as e:
                 st.error(f"เกิดข้อผิดพลาดในการบันทึก: {e}")
+
