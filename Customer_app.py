@@ -15,7 +15,7 @@ from io import BytesIO
 # ==========================================
 # ⚙️ ตั้งค่าระบบ
 # ==========================================
-ADMIN_PASSWORD = "3457"
+ADMIN_PASSWORD = "34573457"
 
 st.set_page_config(
     page_title="ระบบออกใบกำกับภาษีร้าน Nami 345 ปากเกร็ด", 
@@ -123,4 +123,303 @@ def fix_phone_number(phone_val):
 
 def fix_tax_id(tax_val):
     s = str(tax_val).strip().replace("-", "").replace(" ", "").replace("'", "")
-    if s
+    if s.endswith(".0"): s = s[:-2]
+    if s.isdigit() and len(s) < 13: s = s.zfill(13)
+    return s
+
+@st.cache_data
+def load_thai_address_data():
+    try:
+        url = "https://raw.githubusercontent.com/earthchie/jquery.Thailand.js/master/jquery.Thailand.js/database/raw_database/raw_database.json"
+        data = pd.read_json(url)
+        return data
+    except:
+        return pd.DataFrame()
+
+def smart_clean_address(addr1, addr2):
+    house = str(addr1)
+    dist = ""
+    prov = str(addr2)
+    match_amp = re.search(r'(เขต|อำเภอ|อ\.)\s*([^\s]+)', prov)
+    if match_amp:
+        extracted = match_amp.group(0)
+        dist += extracted + " "
+        prov = prov.replace(extracted, "").strip()
+    match_tum = re.search(r'(แขวง|ตำบล|ต\.)\s*([^\s]+)', house)
+    if match_tum:
+        extracted = match_tum.group(0)
+        dist = extracted + " " + dist
+        house = house.replace(extracted, "").strip()
+    return house.strip(), dist.strip(), prov.strip()
+
+# ==========================================
+# 🎮 Main Logic
+# ==========================================
+
+query_params = st.query_params
+token_from_url = query_params.get("token", None)
+
+# --- Admin Section ---
+if not token_from_url:
+    st.title("🔒 ระบบจัดการร้าน Nami")
+    st.info("หน้านี้สำหรับเจ้าของร้านเท่านั้น")
+    with st.expander("🔑 เข้าสู่ระบบสร้าง QR Code", expanded=True):
+        pwd = st.text_input("ใส่รหัสผ่าน", type="password")
+        if pwd == ADMIN_PASSWORD:
+            st.success("ยินดีต้อนรับครับ!")
+            st.markdown("---")
+            st.subheader("สร้าง QR รับเงิน")
+            gen_amount = st.number_input("ยอดเงินที่ต้องการ (บาท)", min_value=1.0, step=1.0)
+            if st.button("✨ สร้าง QR Code และ ลิงก์"):
+                try:
+                    token = str(uuid.uuid4())
+                    client = get_sheet_connection()
+                    sheet_token = client.open("Invoice_Data").worksheet("TokenDB")
+                    ts = datetime.now(pytz.timezone('Asia/Bangkok')).strftime("%Y-%m-%d %H:%M:%S")
+                    sheet_token.append_row([token, gen_amount, "Active", ts])
+                    
+                    base_url = "https://nami-invoice-app.streamlit.app" 
+                    final_url = f"{base_url}/?token={token}"
+                    qr = qrcode.make(final_url)
+                    buf = BytesIO()
+                    qr.save(buf)
+                    
+                    st.write("---")
+                    col1, col2 = st.columns(2)
+                    with col1: st.image(buf, caption=f"QR ยอด {gen_amount} บาท", width=250)
+                    with col2:
+                        st.warning("🔗 **ลิงก์สำหรับส่งให้ลูกค้า**")
+                        st.code(final_url, language=None)
+                except Exception as e: st.error(f"เกิดข้อผิดพลาด: {e}")
+    st.stop()
+
+# --- Customer Validation ---
+token_data = check_token_status(token_from_url)
+locked_amount = 0.0
+
+if token_data is not None:
+    if token_data['Status'] == 'Active':
+        locked_amount = float(token_data['Amount'])
+    elif token_data['Status'] == 'Used':
+        st.error("❌ QR Code หรือลิงก์นี้ถูกใช้งานไปแล้ว")
+        st.stop()
+else:
+    st.error("❌ รหัสไม่ถูกต้อง หรือไม่พบในระบบ")
+    st.stop()
+
+# ==========================================
+# 📝 ส่วนฟอร์มลูกค้า (Customer App)
+# ==========================================
+st.title("🧾 ขอใบกำกับภาษี")
+st.success(f"💰 ยอดชำระ: {locked_amount:,.2f} บาท")
+st.markdown("---")
+
+if 'last_submitted_id' not in st.session_state:
+    st.session_state['last_submitted_id'] = ""
+
+# โหลด Database
+try:
+    client = get_sheet_connection()
+    sheet_db = client.open("Invoice_Data").worksheet("Customers")
+    sheet_queue = client.open("Invoice_Data").worksheet("Queue")
+    thai_db = load_thai_address_data() 
+except:
+    st.error("เชื่อมต่อฐานข้อมูลไม่ได้ กรุณาแจ้งพนักงาน")
+    st.stop()
+
+# ตัวแปรสำหรับเก็บค่าที่จะแสดงในฟอร์ม
+val_name = ""
+val_addr1_full = ""
+val_addr2 = ""
+val_phone = ""
+val_dist_clean = "" 
+
+# --------------------------------------------------------
+# ส่วนที่ 1: ค้นหา Tax ID (ย้ายมาไว้บนสุด + ทำให้เด่น)
+# --------------------------------------------------------
+st.header("1️⃣ ค้นหาข้อมูลเก่า")
+col_s1, col_s2 = st.columns([3, 1])
+
+with col_s1:
+    search_taxid = st.text_input("เลขผู้เสียภาษี 13 หลัก", max_chars=13, placeholder="พิมพ์เลข 13 หลักตรงนี้...")
+with col_s2:
+    st.write("") # เว้นบรรทัดเพื่อให้ปุ่มตรงกับช่องกรอก
+    st.write("")
+    btn_search = st.button("🔍 กดค้นหา", use_container_width=True)
+
+# Logic การค้นหา Tax ID
+if (len(search_taxid) >= 10) or btn_search:
+    try:
+        data = sheet_db.get_all_records()
+        df = pd.DataFrame(data)
+        if 'TaxID' in df.columns:
+            search_key = fix_tax_id(search_taxid)
+            df['TaxID_Clean'] = df['TaxID'].apply(fix_tax_id)
+            res = df[df['TaxID_Clean'] == search_key]
+            
+            if not res.empty: 
+                found_cust = res.iloc[0]
+                st.info(f"✅ พบข้อมูลเดิมของ: {found_cust['Name']}")
+                val_name = found_cust['Name']
+                raw_addr1 = found_cust['Address1']
+                raw_addr2 = found_cust['Address2']
+                val_phone = fix_phone_number(found_cust['Phone'])
+                # Clean Address
+                val_addr1_full, val_dist_clean, val_addr2 = smart_clean_address(raw_addr1, raw_addr2)
+            else:
+                st.caption("ℹ️ ไม่พบข้อมูลเก่า (กรอกใหม่ด้านล่าง)")
+    except Exception as e: 
+        st.error(f"ระบบค้นหาขัดข้อง: {e}")
+
+st.markdown("---")
+
+# --------------------------------------------------------
+# ส่วนที่ 2: ค้นหาที่อยู่ด้วยรหัสไปรษณีย์ (ย้ายมาต่อจาก Tax ID)
+# --------------------------------------------------------
+st.header("2️⃣ ค้นหาที่อยู่ (ด้วยรหัสไปรษณีย์)")
+st.caption("ไม่ต้องพิมพ์ยาว! แค่ใส่รหัสไปรษณีย์ ระบบจะเติมตำบล/อำเภอ/จังหวัด ให้เองครับ")
+
+col_z1, col_z2 = st.columns([3, 1])
+with col_z1:
+    input_zip = st.text_input("รหัสไปรษณีย์ 5 หลัก", max_chars=5, placeholder="เช่น 11120")
+with col_z2:
+    st.write("")
+    st.write("")
+    btn_zip = st.button("🚀 ค้นหาที่อยู่", use_container_width=True)
+
+# Logic การค้นหาที่อยู่
+display_sub_district = val_dist_clean 
+display_province = val_addr2
+
+if (len(input_zip) == 5 and not thai_db.empty) or btn_zip:
+    if len(input_zip) == 5:
+        thai_db['zipcode'] = thai_db['zipcode'].astype(str)
+        results = thai_db[thai_db['zipcode'] == input_zip]
+        
+        if not results.empty:
+            options = []
+            for index, row in results.iterrows():
+                if "กรุงเทพ" in row['province']:
+                    label = f"แขวง{row['district']} > เขต{row['amphoe']} > {row['province']}"
+                else:
+                    label = f"ต.{row['district']} > อ.{row['amphoe']} > จ.{row['province']}"
+                options.append(label)
+            
+            final_options = ["👇 เลือกตำบล/อำเภอที่ถูกต้อง..."] + options
+            selected_option = st.selectbox("📍 ผลการค้นหา (เลือกด้านล่าง)", final_options)
+            
+            if selected_option and "👇" not in selected_option:
+                parts = selected_option.split(" > ")
+                display_sub_district = f"{parts[0]} {parts[1]}"
+                display_province = f"{parts[2]} {input_zip}"
+                st.success("✅ เลือกที่อยู่เรียบร้อย! กรอกเลขที่บ้านต่อด้านล่างได้เลย")
+        else:
+            st.warning("❌ ไม่พบรหัสไปรษณีย์นี้")
+    elif btn_zip and len(input_zip) < 5:
+        st.error("กรุณากรอกรหัสไปรษณีย์ให้ครบ 5 หลัก")
+
+st.markdown("---")
+
+# --------------------------------------------------------
+# ส่วนที่ 3: กรอกรายละเอียด (รวมทุกอย่างไว้ที่นี่)
+# --------------------------------------------------------
+st.header("3️⃣ ตรวจสอบข้อมูลให้ครบถ้วน")
+
+# ชื่อและ Tax ID
+c_name = st.text_input("ชื่อลูกค้า / ชื่อบริษัท", value=val_name)
+c_tax = st.text_input("เลขประจำตัวผู้เสียภาษี (ตรวจสอบความถูกต้อง)", value=search_taxid, max_chars=13)
+c_phone = st.text_input("เบอร์โทรศัพท์", value=val_phone)
+
+# ที่อยู่ (ใช้ค่าที่ได้จากการค้นหามาแสดงผล)
+default_house_no = val_addr1_full
+c_house_no = st.text_input("🏠 เลขที่บ้าน / หมู่บ้าน / ถนน / ซอย", value=default_house_no, placeholder="เช่น 99/99 หมู่ 1 ซ.วัดกู้")
+
+col_a1, col_a2 = st.columns(2)
+with col_a1:
+    c_dist = st.text_input("ตำบล / อำเภอ", value=display_sub_district, placeholder="ระบบเติมให้อัตโนมัติ")
+with col_a2:
+    c_prov = st.text_input("จังหวัด / รหัสไปรษณีย์", value=display_province, placeholder="ระบบเติมให้อัตโนมัติ")
+
+st.markdown("---")
+c_item = st.text_input("รายการสินค้า", value="อาหาร เครื่องดื่ม และเบเกอรี่", disabled=True)
+c_price = st.number_input("ยอดเงินรวม (บาท)", value=locked_amount, disabled=True)
+
+# ==========================================
+# 🔘 ปุ่มยืนยันข้อมูล (Final Submit)
+# ==========================================
+st.markdown("")
+if st.button("✅ ยืนยันข้อมูลถูกต้อง (กดตรงนี้)", type="primary", use_container_width=True):
+    if not c_name or not c_tax:
+        st.error("❌ กรุณากรอก 'ชื่อ' และ 'เลขผู้เสียภาษี'")
+    elif len(c_tax) != 13:
+        st.error("❌ 'เลขประจำตัวผู้เสียภาษี' ต้องมี 13 หลักเท่านั้น")
+    elif not c_house_no: 
+        st.error("❌ กรุณากรอก 'ที่อยู่ (เลขที่บ้าน)'")
+    else:
+        sig = f"{c_tax}_{c_price}_{token_from_url}"
+        
+        if st.session_state['last_submitted_id'] == sig:
+            st.warning("⚠️ รายการนี้ส่งไปแล้ว")
+        else:
+            ts = datetime.now(pytz.timezone('Asia/Bangkok')).strftime("%Y-%m-%d %H:%M:%S")
+            cl_phone = fix_phone_number(c_phone)
+            
+            final_addr1 = f"{c_house_no} {c_dist}".strip()
+            final_addr2 = c_prov.strip()
+            fixed_tax_val = fix_tax_id(c_tax)
+            
+            try:
+                # 1. บันทึกเข้า Tab Queue (สำหรับพิมพ์ใบกำกับ)
+                sheet_queue.append_row([ts, c_name, fixed_tax_val, final_addr1, final_addr2, str(cl_phone), c_item, 1, c_price, "Pending"])
+                
+                # 2. บันทึกเข้า Tab Sale_logs (เก็บประวัติยอดขาย)
+                try:
+                    sheet_sale_logs = client.open("Invoice_Data").worksheet("Sale_logs")
+                    sheet_sale_logs.append_row([ts, c_name, fixed_tax_val, c_price, "Customer Filled", token_from_url])
+                except Exception as ex_log:
+                    # ถ้าหา Tab ไม่เจอ ให้ข้ามไปก่อนเพื่อไม่ให้โปรแกรมพัง
+                    print(f"Log Error: {ex_log}")
+
+                # 3. บันทึก Tab Customers (ถ้ายังไม่มี)
+                try:
+                    exist_data = sheet_db.get_all_records()
+                    df_ex = pd.DataFrame(exist_data)
+                    need_save = True
+                    if not df_ex.empty and 'TaxID' in df_ex.columns:
+                        df_ex['TaxID_Clean'] = df_ex['TaxID'].apply(fix_tax_id)
+                        if fixed_tax_val in df_ex['TaxID_Clean'].values:
+                            need_save = False
+                    
+                    if need_save:
+                        sheet_db.append_row([c_name, fixed_tax_val, final_addr1, final_addr2, str(cl_phone)])
+                except:
+                    # กรณีฉุกเฉิน บันทึกไปเลย
+                    sheet_db.append_row([c_name, fixed_tax_val, final_addr1, final_addr2, str(cl_phone)])
+
+                # 4. ปิด Token
+                mark_token_as_used(token_from_url)
+                
+                # 5. ส่ง LINE แจ้งเตือนแบบละเอียด
+                full_message = (
+                    f"🔔 **แจ้งเตือนข้อมูลใบกำกับภาษี**\n"
+                    f"━━━━━━━━━━━━━━━━━━━━\n"
+                    f"👤 ชื่อ: {c_name}\n"
+                    f"🆔 Tax ID: {fixed_tax_val}\n"
+                    f"🏠 ที่อยู่: {final_addr1} {final_addr2}\n"
+                    f"📞 โทร: {cl_phone}\n"
+                    f"💰 ยอด: {c_price:,.2f} บาท\n"
+                    f"📦 รายการ: {c_item}\n"
+                    f"⏰ เวลา: {ts}\n"
+                    f"━━━━━━━━━━━━━━━━━━━━"
+                )
+                send_line_message(full_message)
+                
+                st.session_state['last_submitted_id'] = sig
+                st.success("🎉 บันทึกข้อมูลเรียบร้อย! ขอบคุณที่ใช้บริการครับ")
+                st.balloons()
+                time.sleep(3)
+                st.query_params.clear() 
+                st.rerun()
+                
+            except Exception as e:
+                st.error(f"เกิดข้อผิดพลาดในการบันทึก: {e}")
