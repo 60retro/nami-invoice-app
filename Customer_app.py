@@ -24,7 +24,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 🎨 CSS: ปรับแต่งพิเศษสำหรับผู้สูงอายุ (ตัวใหญ่/ช่องชัด)
+# 🎨 CSS: ปรับปรุงสำหรับผู้สูงอายุ + รองรับ Dark Mode
 style_senior_friendly = """
     <style>
         #MainMenu {visibility: hidden;}
@@ -36,14 +36,16 @@ style_senior_friendly = """
             height: 50px !important;
         }
         
-        /* เพิ่มขนาดหัวข้อ (Label) */
+        /* เพิ่มขนาดหัวข้อ (Label) 
+           FIX: ลบคำสั่ง color: #000 ออก เพื่อให้ปรับสีตาม Dark Mode อัตโนมัติ 
+        */
         .stTextInput label, .stSelectbox label {
             font-size: 20px !important;
             font-weight: bold !important;
-            color: #000 !important;
         }
 
         /* ปรับแต่ง Dropdown Selectbox */
+        /* ตรงนี้ยังคงสีพื้นหลังชมพู และตัวหนังสือดำไว้เฉพาะในกล่อง เพื่อให้อ่านง่ายเสมอ */
         .stSelectbox div[data-baseweb="select"] > div {
             border-color: #ff4b4b !important;
             background-color: #fff0f0 !important;
