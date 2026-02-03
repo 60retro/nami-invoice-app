@@ -374,10 +374,10 @@ if st.button("✅ ยืนยันข้อมูลถูกต้อง (ก
                 # 1. บันทึกเข้า Tab Queue (สำหรับพิมพ์ใบกำกับ)
                 sheet_queue.append_row([ts, c_name, fixed_tax_val, final_addr1, final_addr2, str(cl_phone), c_item, 1, c_price, "Pending"])
                 
-                # 2. บันทึกเข้า Tab Sale_logs (เก็บประวัติยอดขาย)
+                # 2. บันทึกเข้า Tab SaleLogs (เก็บประวัติยอดขาย)
                 try:
-                    sheet_sale_logs = client.open("Invoice_Data").worksheet("Sale_logs")
-                    sheet_sale_logs.append_row([ts, c_name, fixed_tax_val, c_price, "Customer Filled", token_from_url])
+                    sheet_SaleLogs = client.open("Invoice_Data").worksheet("SaleLogs")
+                    sheet_SaleLogs.append_row([ts, c_name, fixed_tax_val, c_price, "Customer Filled", token_from_url])
                 except Exception as ex_log:
                     # ถ้าหา Tab ไม่เจอ ให้ข้ามไปก่อนเพื่อไม่ให้โปรแกรมพัง
                     print(f"Log Error: {ex_log}")
@@ -425,4 +425,5 @@ if st.button("✅ ยืนยันข้อมูลถูกต้อง (ก
                 
             except Exception as e:
                 st.error(f"เกิดข้อผิดพลาดในการบันทึก: {e}")
+
 
