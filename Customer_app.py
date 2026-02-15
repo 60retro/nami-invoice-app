@@ -263,12 +263,9 @@ if (len(search_taxid) >= 10) or btn_search:
                 st.info(f"✅ พบข้อมูลเดิมของ: {found_cust['Name']}")
                 
                 # ระบบดึงชื่อมา แต่ต้องมาตัด Branch Suffix ออกเพื่อให้ลูกค้าเลือกใหม่ได้ถูกต้อง
-                # แต่เพื่อความง่าย ดึงชื่อเต็มมาใส่ช่องชื่อเลย แล้วให้ลูกค้าลบเองถ้ารก
-                # หรือจะ Clean logic ตรงนี้ก็ได้ แต่เอาแบบ simple คือแสดงชื่อเดิมไปก่อน
                 val_name = found_cust['Name'] 
                 
                 # พยายามตัดส่วนขยายออกเพื่อให้ลูกค้าเลือกสาขาใหม่ได้สะดวก
-                # เช่น "บริษัท A (สำนักงานใหญ่)" -> ตัดเหลือ "บริษัท A"
                 val_name_clean = re.sub(r'\s*\(สำนักงานใหญ่\)$', '', val_name)
                 val_name_clean = re.sub(r'\s*\(สาขา.*?\)$', '', val_name_clean)
                 val_name = val_name_clean
@@ -385,52 +382,68 @@ c_item = st.text_input("รายการสินค้า", value="อาห�
 c_price = st.number_input("ยอดเงินรวม (บาท)", value=locked_amount, disabled=True)
 
 # ==========================================
-# 🟢 ฟังก์ชันบันทึกข้อมูล (Save Logic)
+# 🟢 ฟังก์ชันบันทึกข้อมูล (Save Logic - Fixed Version)
 # ==========================================
 def save_data_to_system(ts, c_name_final, fixed_tax_val, final_addr1, final_addr2, cl_phone, c_item, c_price, sig):
+    # ตัวแปรเช็คว่าบันทึกคิวสำเร็จไหม
+    is_queue_saved = False
+    
+    # 1. บันทึกเข้า Tab Queue (สำคัญที่สุด)
     try:
-        # 1. บันทึกเข้า Tab Queue
         sheet_queue.append_row([ts, c_name_final, fixed_tax_val, final_addr1, final_addr2, str(cl_phone), c_item, 1, c_price, "Pending"])
-        
-        # 2. บันทึก Tab Customers
-        try:
-            exist_data = sheet_db.get_all_records()
-            df_ex = pd.DataFrame(exist_data)
-            need_save = True
-            if not df_ex.empty and 'TaxID' in df_ex.columns:
-                df_ex['TaxID_Clean'] = df_ex['TaxID'].apply(fix_tax_id)
-                if fixed_tax_val in df_ex['TaxID_Clean'].values:
-                    need_save = False
-            
-            if need_save:
-                sheet_db.append_row([c_name_final, fixed_tax_val, final_addr1, final_addr2, str(cl_phone)])
-        except:
-            sheet_db.append_row([c_name_final, fixed_tax_val, final_addr1, final_addr2, str(cl_phone)])
-
-        # 3. ปิด Token
-        mark_token_as_used(token_from_url)
-        
-        # 4. ส่ง LINE
-        full_message = (
-            f"🔔 **ลูกค้ากรอกฟอร์มสำเร็จ**\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"👤 ชื่อ: {c_name_final}\n"
-            f"🆔 Tax ID: {fixed_tax_val}\n"
-            f"🏠 ที่อยู่: {final_addr1} {final_addr2}\n"
-            f"📞 โทร: {cl_phone}\n"
-            f"💰 ยอด: {c_price:,.2f} บาท\n"
-            f"📦 รายการ: {c_item}\n"
-            f"⏰ เวลา: {ts}\n"
-            f"━━━━━━━━━━━━━━━━━━━━"
-        )
-        send_line_message(full_message)
-        
-        # Update Session State
-        st.session_state['last_submitted_id'] = sig
-        st.session_state['submit_success'] = True
-
+        is_queue_saved = True # มาร์คว่าสำเร็จ
     except Exception as e:
-        st.error(f"เกิดข้อผิดพลาดในการบันทึก: {e}")
+        st.error(f"❌ บันทึกคิวไม่สำเร็จ: {e}")
+        return # จบการทำงานทันที
+
+    # 2. บันทึก Tab Customers (แยก Try-Catch ไม่ให้กระทบไลน์)
+    if is_queue_saved:
+        try:
+            try:
+                exist_data = sheet_db.get_all_records()
+                df_ex = pd.DataFrame(exist_data)
+                need_save = True
+                if not df_ex.empty and 'TaxID' in df_ex.columns:
+                    df_ex['TaxID_Clean'] = df_ex['TaxID'].apply(fix_tax_id)
+                    if fixed_tax_val in df_ex['TaxID_Clean'].values:
+                        need_save = False
+                
+                if need_save:
+                    sheet_db.append_row([c_name_final, fixed_tax_val, final_addr1, final_addr2, str(cl_phone)])
+            except:
+                # ถ้าเช็คซ้ำไม่ได้ ให้บันทึกไปเลย (ดีกว่าหลุด)
+                sheet_db.append_row([c_name_final, fixed_tax_val, final_addr1, final_addr2, str(cl_phone)])
+        except Exception as e:
+            print(f"Customer Save Error: {e}")
+
+    # 3. ปิด Token
+    try:
+        mark_token_as_used(token_from_url)
+    except:
+        pass
+
+    # 4. ส่ง LINE (ทำงานแน่นอนถ้าคิวเข้า)
+    if is_queue_saved:
+        try:
+            full_message = (
+                f"🔔 **ลูกค้ากรอกฟอร์มสำเร็จ**\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"👤 ชื่อ: {c_name_final}\n"
+                f"🆔 Tax ID: {fixed_tax_val}\n"
+                f"🏠 ที่อยู่: {final_addr1} {final_addr2}\n"
+                f"📞 โทร: {cl_phone}\n"
+                f"💰 ยอด: {c_price:,.2f} บาท\n"
+                f"📦 รายการ: {c_item}\n"
+                f"⏰ เวลา: {ts}\n"
+                f"━━━━━━━━━━━━━━━━━━━━"
+            )
+            send_line_message(full_message)
+        except Exception as e:
+            st.error(f"ส่ง LINE ไม่สำเร็จ: {e}")
+
+    # Update Session State
+    st.session_state['last_submitted_id'] = sig
+    st.session_state['submit_success'] = True
 
 # ==========================================
 # 🟢 หน้าต่าง Pop-up ยืนยัน (Dialog)
