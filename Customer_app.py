@@ -81,7 +81,7 @@ def get_sheet_connection():
     client = gspread.authorize(creds)
     return client
 
-@st.cache_data(ttl=0)
+@st.cache_data(ttl=300)
 def check_token_status(token_str):
     try:
         if not token_str:
@@ -553,3 +553,4 @@ else:
                     preview_phone=cl_phone,
                     data_payload=payload
                 )
+
