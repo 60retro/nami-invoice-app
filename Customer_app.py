@@ -84,16 +84,28 @@ def get_sheet_connection():
 @st.cache_data(ttl=0)
 def check_token_status(token_str):
     try:
+        if not token_str:
+            return None
+        
+        # ตัดช่องว่างซ้ายขวาเผื่อมีติดมากับ URL
+        clean_token = str(token_str).strip()
+
         client = get_sheet_connection()
         sheet_token = client.open("Invoice_Data").worksheet("TokenDB")
         records = sheet_token.get_all_records()
         df = pd.DataFrame(records)
+        
         if not df.empty and 'Token' in df.columns:
-            df['Token'] = df['Token'].astype(str)
-            match = df[df['Token'] == token_str]
-            if not match.empty: return match.iloc[0]
+            # แปลงข้อมูลเป็น String และตัดช่องว่าง
+            df['Token'] = df['Token'].astype(str).str.strip()
+            match = df[df['Token'] == clean_token]
+            if not match.empty: 
+                return match.iloc[0]
         return None
-    except: return None
+    except Exception as e:
+        # แสดง Error กรณี Google Sheets เชื่อมต่อไม่ได้
+        st.error(f"⚠️ ระบบฐานข้อมูลขัดข้องชั่วคราว: {e}")
+        return None
 
 def mark_token_as_used(token_str):
     try:
@@ -157,6 +169,10 @@ def smart_clean_address(addr1, addr2):
 
 query_params = st.query_params
 token_from_url = query_params.get("token", None)
+
+# ดักจับกรณีที่ Streamlit คืนค่ามาเป็น List
+if isinstance(token_from_url, list) and len(token_from_url) > 0:
+    token_from_url = token_from_url[0]
 
 # --- Admin Section ---
 if not token_from_url:
