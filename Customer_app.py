@@ -234,14 +234,23 @@ if 'last_submitted_id' not in st.session_state:
 if 'submit_success' not in st.session_state:
     st.session_state['submit_success'] = False
 
+# ==========================================
+# สร้างฟังก์ชันจำไฟล์ชีต เพื่อไม่ให้ดึงข้อมูลซ้ำรัวๆ
+# ==========================================
+@st.cache_resource
+def get_worksheets():
+    client_conn = get_sheet_connection()
+    db = client_conn.open("Invoice_Data").worksheet("Customers")
+    queue = client_conn.open("Invoice_Data").worksheet("Queue")
+    return db, queue
+
 # โหลด Database
 try:
-    client = get_sheet_connection()
-    sheet_db = client.open("Invoice_Data").worksheet("Customers")
-    sheet_queue = client.open("Invoice_Data").worksheet("Queue")
+    sheet_db, sheet_queue = get_worksheets()
     thai_db = load_thai_address_data() 
-except:
-    st.error("เชื่อมต่อฐานข้อมูลไม่ได้ กรุณาแจ้งพนักงาน")
+except Exception as e:
+    # เพิ่มการแสดง Error ที่แท้จริงออกมา จะได้รู้ว่าเกิดจากอะไร
+    st.error(f"เชื่อมต่อฐานข้อมูลไม่ได้ กรุณาแจ้งพนักงาน (ระบบแจ้งว่า: {e})")
     st.stop()
 
 # ตัวแปรสำหรับเก็บค่าที่จะแสดงในฟอร์ม
@@ -265,7 +274,7 @@ with col_s2:
     btn_search = st.button("🔍 กดค้นหา", use_container_width=True)
 
 # Logic การค้นหา Tax ID
-if (len(search_taxid) >= 10) or btn_search:
+if (len(search_taxid) == 13) or btn_search:
     try:
         data = sheet_db.get_all_records()
         df = pd.DataFrame(data)
@@ -553,4 +562,3 @@ else:
                     preview_phone=cl_phone,
                     data_payload=payload
                 )
-
