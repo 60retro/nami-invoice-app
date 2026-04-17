@@ -214,29 +214,37 @@ if not token_from_url:
             st.markdown("---")
             st.subheader("สร้าง QR รับเงิน")
             gen_amount = st.number_input("ยอดเงินที่ต้องการ (บาท)", min_value=1.0, step=1.0)
+            
+            # 🔴 จุดแก้ไขที่ 1: ป้องกันสร้าง QR ซ้ำ
             if st.button("✨ สร้าง QR Code และ ลิงก์"):
-                try:
-                    token = str(uuid.uuid4())
-                    client = get_sheet_connection()
-                    sheet_token = client.open("Invoice_Data").worksheet("TokenDB")
-                    ts = datetime.now(pytz.timezone('Asia/Bangkok')).strftime("%Y-%m-%d %H:%M:%S")
-                    
-                    # 🛠️ แก้ไข: เปลี่ยนจาก append_row เป็น insert_row บังคับแทรกที่บรรทัดที่ 2 เสมอ เพื่อป้องกันการ Overwrite
-                    sheet_token.insert_row([token, gen_amount, "Active", ts], index=2)
-                    
-                    base_url = "https://nami-invoice-app.streamlit.app" 
-                    final_url = f"{base_url}/?token={token}"
-                    qr = qrcode.make(final_url)
-                    buf = BytesIO()
-                    qr.save(buf)
-                    
-                    st.write("---")
-                    col1, col2 = st.columns(2)
-                    with col1: st.image(buf, caption=f"QR ยอด {gen_amount} บาท", width=250)
-                    with col2:
-                        st.warning("🔗 **ลิงก์สำหรับส่งให้ลูกค้า**")
-                        st.code(final_url, language=None)
-                except Exception as e: st.error(f"เกิดข้อผิดพลาด: {e}")
+                if st.session_state.get('is_generating_qr', False):
+                    st.warning("⏳ ระบบกำลังสร้าง QR Code กรุณารอสักครู่...")
+                else:
+                    st.session_state['is_generating_qr'] = True
+                    with st.spinner("⏳ กำลังสร้าง QR และบันทึกลงฐานข้อมูล..."):
+                        try:
+                            token = str(uuid.uuid4())
+                            client = get_sheet_connection()
+                            sheet_token = client.open("Invoice_Data").worksheet("TokenDB")
+                            ts = datetime.now(pytz.timezone('Asia/Bangkok')).strftime("%Y-%m-%d %H:%M:%S")
+                            
+                            sheet_token.insert_row([token, gen_amount, "Active", ts], index=2)
+                            
+                            base_url = "https://nami-invoice-app.streamlit.app" 
+                            final_url = f"{base_url}/?token={token}"
+                            qr = qrcode.make(final_url)
+                            buf = BytesIO()
+                            qr.save(buf)
+                            
+                            st.write("---")
+                            col1, col2 = st.columns(2)
+                            with col1: st.image(buf, caption=f"QR ยอด {gen_amount} บาท", width=250)
+                            with col2:
+                                st.warning("🔗 **ลิงก์สำหรับส่งให้ลูกค้า**")
+                                st.code(final_url, language=None)
+                        except Exception as e: 
+                            st.error(f"เกิดข้อผิดพลาด: {e}")
+                    st.session_state['is_generating_qr'] = False
     st.stop()
 
 # --- Customer Validation ---
@@ -432,11 +440,15 @@ c_price = st.number_input("ยอดเงินรวม (บาท)", value=lo
 # ==========================================
 # 🟢 ฟังก์ชันบันทึกข้อมูล (Save Logic - Fixed Version)
 # ==========================================
-# 🛠️ รับพารามิเตอร์ current_token เพิ่มเติม
 def save_data_to_system(ts, c_name_final, fixed_tax_val, final_addr1, final_addr2, cl_phone, c_item, c_price, sig, current_token):
+    # 🔴 จุดแก้ไขที่ 2: เพิ่มด่านป้องกันกดเบิ้ล 
+    if st.session_state.get('last_submitted_id') == sig:
+        return 
+    
+    st.session_state['last_submitted_id'] = sig
     is_queue_saved = False
     
-    # 1. บันทึกเข้า Tab Queue (เพิ่ม current_token เข้าไปเป็นคอลัมน์ที่ 11)
+    # 1. บันทึกเข้า Tab Queue
     try:
         sheet_queue.append_row([ts, c_name_final, fixed_tax_val, final_addr1, final_addr2, str(cl_phone), c_item, 1, c_price, "Pending", current_token])
         is_queue_saved = True
@@ -489,13 +501,11 @@ def save_data_to_system(ts, c_name_final, fixed_tax_val, final_addr1, final_addr
             st.error(f"ส่ง LINE ไม่สำเร็จ: {e}")
 
     # Update Session State
-    st.session_state['last_submitted_id'] = sig
     st.session_state['submit_success'] = True
 
 # ==========================================
 # 🟢 หน้าต่าง Pop-up ยืนยัน (Dialog)
 # ==========================================
-# 🛠️ ส่งผ่าน token เข้าไปยังฟังก์ชันบันทึกข้อมูลด้วย
 @st.dialog("🧐 ตรวจสอบความถูกต้องอีกครั้ง")
 def show_confirmation_dialog(preview_name, preview_tax, preview_addr, preview_phone, data_payload, active_token):
     st.write("กรุณาตรวจสอบข้อมูลก่อนส่ง:")
@@ -513,19 +523,28 @@ def show_confirmation_dialog(preview_name, preview_tax, preview_addr, preview_ph
     
     col_confirm, col_edit = st.columns(2)
     
+    # 🔴 จุดแก้ไขที่ 3: ป้องกันกดยืนยันซ้ำซ้อน
     if col_confirm.button("✅ ถูกต้อง (ส่งเลย)", type="primary", use_container_width=True):
-        save_data_to_system(
-            data_payload['ts'],
-            data_payload['c_name_final'],
-            data_payload['fixed_tax_val'],
-            data_payload['final_addr1'],
-            data_payload['final_addr2'],
-            data_payload['cl_phone'],
-            data_payload['c_item'],
-            data_payload['c_price'],
-            data_payload['sig'],
-            active_token # ส่ง Token เข้าไปเซฟในชีตด้วย
-        )
+        if st.session_state.get('is_saving_data', False):
+            return 
+            
+        st.session_state['is_saving_data'] = True
+        
+        with st.spinner("⏳ ระบบกำลังส่งข้อมูล กรุณารอสักครู่ (ห้ามกดปิดหน้านี้)..."):
+            save_data_to_system(
+                data_payload['ts'],
+                data_payload['c_name_final'],
+                data_payload['fixed_tax_val'],
+                data_payload['final_addr1'],
+                data_payload['final_addr2'],
+                data_payload['cl_phone'],
+                data_payload['c_item'],
+                data_payload['c_price'],
+                data_payload['sig'],
+                active_token
+            )
+            
+        st.session_state['is_saving_data'] = False
         st.rerun()
         
     if col_edit.button("❌ กลับไปแก้ไข", use_container_width=True):
@@ -554,7 +573,7 @@ else:
         else:
             sig = f"{c_tax}_{c_price}_{token_from_url}"
             
-            if st.session_state['last_submitted_id'] == sig:
+            if st.session_state.get('last_submitted_id') == sig:
                 st.warning("⚠️ รายการนี้ส่งไปแล้ว")
             else:
                 ts = datetime.now(pytz.timezone('Asia/Bangkok')).strftime("%Y-%m-%d %H:%M:%S")
@@ -583,5 +602,5 @@ else:
                     preview_addr=f"{final_addr1} {final_addr2}",
                     preview_phone=cl_phone,
                     data_payload=payload,
-                    active_token=token_from_url # ส่ง Token ไปยัง Dialog
+                    active_token=token_from_url
                 )
