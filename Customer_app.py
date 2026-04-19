@@ -255,7 +255,7 @@ if token_data is not None:
     if token_data['Status'] == 'Active':
         locked_amount = float(token_data['Amount'])
     elif token_data['Status'] == 'Used':
-        st.error("❌ QR Code หรือลิงก์นี้ถูกใช้งานไปแล้ว")
+        st.error("ข้อมูลถุกส่งเรียบร้อย กรุณารอใบกำกับภาษีจากพนักงานค่ะ QR นี้ไม่สามารถใช้ซ้ำได้ค่ะ")
         st.stop()
 else:
     st.error("❌ รหัสไม่ถูกต้อง หรือไม่พบในระบบ")
